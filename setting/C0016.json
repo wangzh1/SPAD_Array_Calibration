@@ -1,0 +1,9 @@
+{
+    "video_path": "video/C0016.MP4", 
+    "voltage_path": "input_params/input_params_C0016.mat",
+    "template_time": 6, 
+    "wall_board_time": 236,
+    "spad_board_time": 296,
+    "begin_time": 1, 
+    "end_time": 213
+}
