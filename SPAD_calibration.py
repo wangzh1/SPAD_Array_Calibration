@@ -3,19 +3,23 @@ import matplotlib.pyplot as plt
 import cv2
 import json
 import scipy 
+import torch
 
+from torch.utils.data import Dataset
 from matplotlib.widgets import RectangleSelector
 
 class SPAD_calibration:
 
     # Path info
     setting_path = None
-    voltage_cali_path = None
     video_path = None
     detected_pixels_path = None
 
     # Chessboard inner corner number
     pattern_size = None
+
+    # Input params
+    voltage_cali = None
 
     # Template matching info
     interval = 3
@@ -37,22 +41,59 @@ class SPAD_calibration:
     rvecs = None
     tvecs = None
 
+    class Model(torch.nn.Module):
+
+        """
+        MLP for voltage-coordinates mapping.
+        One hidden layer to avoid overfitting.
+        """
+
+        def __init__(self,num_i,num_h,num_o):
+            super(Model, self).__init__()
+            
+            self.linear1=torch.nn.Linear(num_i,num_h)
+            self.tanh1=torch.nn.Tanh()
+            self.linear2=torch.nn.Linear(num_h,num_o)
+    
+        def forward(self, x):
+            x = self.linear1(x)
+            x = self.tanh1(x)
+            x = self.linear2(x)
+
+            return x
+
+
+    class MyData(Dataset):
+        
+        def __init__(self, input, output):
+            self.input = input
+            self.output = output
+
+        def __getitem__(self, idx):
+            return self.input[idx], self.output[idx]
+
+        def __len__(self):
+            return self.input.shape[0]
+        
 
     def __init__(self, 
-                 setting_path,
+                 setting_name,
                  interval=3,
                  threshold=0.7,
                  template_width=40,
                  pattern_size=(15,15)):
         
-        self.setting_path = setting_path
+        setting_path = 'setting/' + setting_name + '.json'
         f = open(setting_path, 'r')
         content = json.load(f)
         
         # Path info
-        self.voltage_cali_path = scipy.io.loadmat(content['input_params_path'])
-        self.video_path = content['video_path']
-        self.detected_pixels_path = content['detected_pixels_path']
+        self.video_path = 'video/' + setting_name + '.MP4'
+        self.detected_pixels_path = 'detected_pixels' + setting_name + '.mat'
+
+        # Input params
+        input_params_path = 'input_params/' + setting_name + '.mat'
+        self.voltage_cali = scipy.io.loadmat(input_params_path) # (2, num_of_points)
 
         # Time info
         self.wall_board_time = content['wall_board_time']
@@ -61,13 +102,16 @@ class SPAD_calibration:
         self.begin_time = content['begin_time']
         self.end_time = content['end_time']
         
+        # read the video
+        self.video = cv2.VideoCapture(self.video_path)
+
         # Template matching info
         self.interval = interval
         self.threshold = threshold
         self.template_width = template_width
         self.pattern_size = pattern_size
     
-
+  # ----------- template matching -> pixels -----------
     def find_center(self):
         """
         Manually select the template for further matching.
@@ -201,9 +245,6 @@ class SPAD_calibration:
 
     
     def template_matching(self):
-
-        # read the video
-        self.video = cv2.VideoCapture(self.video_path)
         
         # get template frame
         center_x, center_y = self.find_center()
@@ -221,19 +262,25 @@ class SPAD_calibration:
         points = self.get_points(template)
         
         # cluster the points
-        output_point = self.cluster_points(points)
+        detected_pixels = self.cluster_points(points)
 
         plt.figure()
-        for dot_pos in output_point:
-            plt.scatter(dot_pos[0], dot_pos[1], c='r', s=10)
-        print(len(output_point))
-        mdic = {'detected_pixels':output_point}
+        for dot_pos in detected_pixels:
+            plt.scatter(dot_pos[0], 1080 - dot_pos[1], c='r', s=10)
+        print(len(detected_pixels))
+        mdic = {'detected_pixels':detected_pixels}
         
         scipy.io.savemat(self.detected_pixels_path, mdic)
+        plt.xlim(0, 1920)
+        plt.ylim(0, 1080)
         plt.show()
 
 
+  # ----------- scene cali -> points coords & spad coords -----------
     def calibrate_scene(self, time):
+        """
+        Detect chessboard corners in the frame at input time, return 
+        """
         
         time *= 1000
         self.video.set(cv2.CAP_PROP_POS_MSEC, time) # gray scale image
@@ -261,19 +308,24 @@ class SPAD_calibration:
             pixels_squeezed = np.squeeze(pixels)
         
         coord = np.zeros((15*15, 3), np.float32)
-        coord[:, :2] = np.mgrid[0:15, 0:15].T.reshape(-1, 2)
+
+        # To make positive x-axis pointing at right and positive y-axis pointing at top,
+        # so that the directions match the directions of voltages' change.
+        coord[:, :2] = np.flip(np.flip(np.mgrid[0:15, 0:15].T.reshape(-1, 2), axis=0), axis=1) / 100 * 1.6
         coords.append(coord)
-        coords_squeezed = np.squeeze(np.array(coords))
 
         _, camera_matrix, _, rvecs, tvecs = cv2.calibrateCamera(coords, pixels, gray.shape[::-1], None, None)
 
-        return coords_squeezed, camera_matrix, rvecs, tvecs
+        return camera_matrix, rvecs, tvecs
 
+
+    @staticmethod
     def img_to_world(img_pixels, rvecs, tvecs, camera_matrix):
         
         """
         img_pixels: (num_of_points, 2)
         rvecs, tvecs: tuple
+        world_coords: (2, num_of_points)
         """
 
         img_pixels = img_pixels.T # (2, num_of_points) 
@@ -290,23 +342,3 @@ class SPAD_calibration:
         
         return world_coords[:2, :] # (2, num_of_points), z = 0
 
-    def world_to_img(world_coords, rvecs, tvecs, camera_matrix):
-        
-        """
-        world_coords: (num_of_points, 3)
-        rvecs, tvecs: tuple
-        """
-        
-        world_coords = world_coords.T # (3, num_of_points) 
-        world_coords = np.concatenate((world_coords, np.ones([1, world_coords.shape[1]])), axis=0) # (4, num_of_points) 
-        
-        # Transfer rotation vector to rotation matrix, and get translation matrix from tuple.
-        R, _ = cv2.Rodrigues(rvecs[0])
-        t = tvecs[0]
-        
-        extrinsic = np.concatenate((R, t), axis=1)
-        img_pixels = camera_matrix @ extrinsic @ world_coords
-        img_pixels = img_pixels / img_pixels[2, :]
-        img_pixels = img_pixels[:2, :] # (2, num_of_points)
-
-        return img_pixels # (2, num_of_points)
