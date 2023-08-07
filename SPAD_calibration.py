@@ -3,10 +3,48 @@ import matplotlib.pyplot as plt
 import cv2
 import json
 import scipy 
+import scipy.io
 import torch
 
 from torch.utils.data import Dataset
 from matplotlib.widgets import RectangleSelector
+
+
+class Model(torch.nn.Module):
+
+    """
+    MLP for voltage-coordinates mapping.
+    One hidden layer to avoid overfitting.
+    """
+
+    def __init__(self,num_i,num_h,num_o):
+        super(Model, self).__init__()
+        
+        self.linear1=torch.nn.Linear(num_i,num_h)
+        self.tanh1=torch.nn.Tanh()
+        self.linear2=torch.nn.Linear(num_h,num_o)
+
+    def forward(self, x):
+        x = self.linear1(x)
+        x = self.tanh1(x)
+        x = self.linear2(x)
+
+        return x
+
+
+class MyData(Dataset):
+    
+    def __init__(self, input, output):
+        self.input = input
+        self.output = output
+
+    def __getitem__(self, idx):
+        return self.input[idx], self.output[idx]
+
+    def __len__(self):
+        return self.input.shape[0]
+        
+
 
 class SPAD_calibration:
 
@@ -41,41 +79,6 @@ class SPAD_calibration:
     rvecs = None
     tvecs = None
 
-    class Model(torch.nn.Module):
-
-        """
-        MLP for voltage-coordinates mapping.
-        One hidden layer to avoid overfitting.
-        """
-
-        def __init__(self,num_i,num_h,num_o):
-            super(Model, self).__init__()
-            
-            self.linear1=torch.nn.Linear(num_i,num_h)
-            self.tanh1=torch.nn.Tanh()
-            self.linear2=torch.nn.Linear(num_h,num_o)
-    
-        def forward(self, x):
-            x = self.linear1(x)
-            x = self.tanh1(x)
-            x = self.linear2(x)
-
-            return x
-
-
-    class MyData(Dataset):
-        
-        def __init__(self, input, output):
-            self.input = input
-            self.output = output
-
-        def __getitem__(self, idx):
-            return self.input[idx], self.output[idx]
-
-        def __len__(self):
-            return self.input.shape[0]
-        
-
     def __init__(self, 
                  setting_name,
                  interval=3,
@@ -89,7 +92,7 @@ class SPAD_calibration:
         
         # Path info
         self.video_path = 'video/' + setting_name + '.MP4'
-        self.detected_pixels_path = 'detected_pixels' + setting_name + '.mat'
+        self.detected_pixels_path = 'detected_pixels/' + setting_name + '.mat'
 
         # Input params
         input_params_path = 'input_params/' + setting_name + '.mat'
@@ -321,7 +324,6 @@ class SPAD_calibration:
 
     @staticmethod
     def img_to_world(img_pixels, rvecs, tvecs, camera_matrix):
-        
         """
         img_pixels: (num_of_points, 2)
         rvecs, tvecs: tuple
@@ -342,3 +344,36 @@ class SPAD_calibration:
         
         return world_coords[:2, :] # (2, num_of_points), z = 0
 
+
+
+def initilization(coords, voltage):
+    dtheta = 0.069719062113912
+    center_index = np.where((np.abs(voltage[:,0]) < 1e-4) * (np.abs(voltage[:,1]) < 1e-4))[0]
+    center_coords = coords[center_index,0:3]
+    base_index = np.where((np.abs(voltage[:,0]) < 1e-4) + (np.abs(voltage[:,1]) < 1e-4))[0]
+    base_coords = coords[base_index,0:3]
+    base_voltage = voltage[base_index,0:2]
+    G_point = np.array([center_coords[0,0], center_coords[0,1], 1]) + np.random.randn(3) * 0.01
+    max_step = 1001
+    for p in range(1001):
+        num_search = 11
+        GP_se = G_point.reshape(1,3) + np.random.randn(num_search,3) * 0.1
+        GP_se = np.concatenate((GP_se, G_point.reshape(1,3)), axis = 0)
+        GP_se = GP_se.reshape(1,num_search+1,3)
+
+        l0 = np.sqrt(np.sum((GP_se - center_coords.reshape(1,1,3)) ** 2, axis = 2))
+        li = np.sqrt(np.sum((GP_se - base_coords.reshape(-1,1,3)) ** 2, axis = 2))
+        d = np.sqrt(np.sum((center_coords.reshape(1,1,3) - base_coords.reshape(-1,1,3)) ** 2, axis = 2))
+        costheta = (l0 ** 2 + li ** 2 - d ** 2) / 2 / l0 / li
+        theta_diff = np.arccos(costheta) - dtheta * np.sum(np.abs(base_voltage), axis = 1)[:,None]
+        loss = np.sqrt(np.mean(theta_diff ** 2, axis = 0))
+
+        index = np.where((np.abs(loss - np.nanmin(loss)) < 1e-8))
+        index_i = index[0][0].item()
+        if p % 500 == 0:
+            pass
+            print('Initialization:', p,'/',max_step-1,' Angle RMSE:', loss[index_i])
+        
+        G_point = GP_se[0,index_i,:]
+    return G_point
+    

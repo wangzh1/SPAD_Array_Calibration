@@ -1,0 +1,5 @@
+torch
+scipy
+tqdm
+opencv-python
+matplotlib==3.5.2
