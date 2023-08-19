@@ -1,0 +1,88 @@
+<deployment-project plugin="plugin.apptool" plugin-version="1.0">
+  <configuration build-checksum="894132520" file="C:\Users\74338\Desktop\Photon Force\Matlab\wrapper\pf32.prj" location="C:\Users\74338\Desktop\Photon Force\Matlab\wrapper" name="pf32" target="target.mlapps" target-name="Package App">
+    <param.appname>pf32</param.appname>
+    <param.authnamewatermark />
+    <param.email />
+    <param.company />
+    <param.icon />
+    <param.icons />
+    <param.summary />
+    <param.description />
+    <param.screenshot>C:\Users\74338\AppData\Local\Temp\tp7fbb0188_e670_4cfb_b3fe_6e4a7e17d603.png</param.screenshot>
+    <param.version>1.0</param.version>
+    <param.products.name />
+    <param.products.id />
+    <param.products.version />
+    <param.platforms />
+    <param.output>${PROJECT_ROOT}</param.output>
+    <param.guid>b363063c-e51f-41c3-8a8c-98db3fa6f915</param.guid>
+    <unset>
+      <param.authnamewatermark />
+      <param.email />
+      <param.company />
+      <param.icon />
+      <param.icons />
+      <param.summary />
+      <param.description />
+      <param.version />
+      <param.products.name />
+      <param.products.id />
+      <param.products.version />
+      <param.platforms />
+      <param.output />
+    </unset>
+    <fileset.main>
+      <file>${PROJECT_ROOT}\pf32.mlapp</file>
+    </fileset.main>
+    <fileset.depfun>
+      <file>${PROJECT_ROOT}\genV.m</file>
+      <file>${PROJECT_ROOT}\pf_checkConnection.m</file>
+      <file>${PROJECT_ROOT}\pf_close.m</file>
+      <file>${PROJECT_ROOT}\pf_constructPF32.m</file>
+      <file>${PROJECT_ROOT}\pf_destructPF32.m</file>
+      <file>${PROJECT_ROOT}\pf_getDAC.m</file>
+      <file>${PROJECT_ROOT}\pf_getExposure.m</file>
+      <file>${PROJECT_ROOT}\pf_getLibraryStatus.m</file>
+      <file>${PROJECT_ROOT}\pf_getLinkStatus.m</file>
+      <file>${PROJECT_ROOT}\pf_getMultipleFrames.m</file>
+      <file>${PROJECT_ROOT}\pf_getNumberAccumulations.m</file>
+      <file>${PROJECT_ROOT}\pf_getNumberOfInstantiatedDevices.m</file>
+      <file>${PROJECT_ROOT}\pf_getSyncFrequency.m</file>
+      <file>${PROJECT_ROOT}\pf_isLibLoaded.m</file>
+      <file>${PROJECT_ROOT}\pf_liveImageStream.m</file>
+      <file>${PROJECT_ROOT}\pf_loadLib.m</file>
+      <file>${PROJECT_ROOT}\pf_open.m</file>
+      <file>${PROJECT_ROOT}\pf_setExposure.m</file>
+      <file>${PROJECT_ROOT}\pf_setNumberAccumulations.m</file>
+      <file>${PROJECT_ROOT}\pf_unloadLib.m</file>
+      <file>${PROJECT_ROOT}\pf_uploadFirmware.m</file>
+      <file>${PROJECT_ROOT}\shift_and_enhance.m</file>
+      <file>${PROJECT_ROOT}\voltage.mat</file>
+    </fileset.depfun>
+    <fileset.resources />
+    <fileset.package />
+    <build-deliverables>
+      <file location="C:\Users\74338\Desktop\Photon Force\Matlab" name="wrapper" optional="false">C:\Users\74338\Desktop\Photon Force\Matlab\wrapper</file>
+    </build-deliverables>
+    <workflow />
+    <matlab>
+      <root>D:\MATLAB</root>
+      <toolboxes />
+    </matlab>
+    <platform>
+      <unix>false</unix>
+      <mac>false</mac>
+      <windows>true</windows>
+      <win2k>false</win2k>
+      <winxp>false</winxp>
+      <vista>false</vista>
+      <linux>false</linux>
+      <solaris>false</solaris>
+      <osver>10.0</osver>
+      <os32>false</os32>
+      <os64>true</os64>
+      <arch>win64</arch>
+      <matlab>true</matlab>
+    </platform>
+  </configuration>
+</deployment-project>
